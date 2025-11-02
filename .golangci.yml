@@ -1,0 +1,78 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - gocritic
+    - revive
+    - gosec
+    - unconvert
+    - unparam
+    - prealloc
+    - exportloopref
+    - nolintlint
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  govet:
+    check-shadowing: true
+    enable-all: true
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/smart-fellas/k4a
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+
+  revive:
+    rules:
+      - name: exported
+        arguments:
+          - "checkPrivateReceivers"
+          - "sayRepetitiveInsteadOfStutters"
+
+  gosec:
+    excludes:
+      - G104 # Unhandled errors - covered by errcheck
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+
