@@ -577,8 +577,8 @@ linters:
         - OPTIMIZE # marks code that should be optimized before merging
         - HACK # marks hack-around that should be removed before merging
 
-    goheader:
-    # Supports two types 'const` and `regexp`.
+    #goheader:
+     # template: # Supports two types 'const` and `regexp`.
     # Values can be used recursively.
     # Default: {}
     #values:
