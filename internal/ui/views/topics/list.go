@@ -15,7 +15,7 @@ import (
 type Model struct {
 	client  *kafkactl.Client
 	table   table.Model
-	topics  []map[string]interface{}
+	topics  []map[string]any
 	keys    keys.KeyMap
 	width   int
 	height  int
@@ -175,22 +175,33 @@ func (m *Model) updateTable() {
 	rows := []table.Row{}
 
 	for _, topic := range m.topics {
-		metadata := topic["metadata"].(map[string]interface{})
-		spec := topic["spec"].(map[string]interface{})
+		metadata, ok := topic["metadata"].(map[string]any)
+		if !ok {
+			continue
+		}
 
-		name := metadata["name"].(string)
+		spec, ok := topic["spec"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		name, ok := metadata["name"].(string)
+		if !ok {
+			continue
+		}
+
 		partitions := fmt.Sprintf("%v", spec["partitions"])
 		replication := fmt.Sprintf("%v", spec["replicationFactor"])
 
 		retention := "-"
-		if configs, ok := spec["configs"].(map[string]interface{}); ok {
-			if ret, ok := configs["retention.ms"]; ok {
+		if configs, configsOk := spec["configs"].(map[string]any); configsOk {
+			if ret, retOk := configs["retention.ms"]; retOk {
 				retention = fmt.Sprintf("%v", ret)
 			}
 		}
 
 		description := "-"
-		if desc, ok := spec["description"].(string); ok {
+		if desc, descOk := spec["description"].(string); descOk {
 			description = desc
 		}
 
@@ -206,7 +217,7 @@ func (m *Model) updateTable() {
 	m.table.SetRows(rows)
 }
 
-func (m *Model) updateConsumersTable(groups []map[string]interface{}) {
+func (m *Model) updateConsumersTable(groups []map[string]any) {
 	columns := []table.Column{
 		{Title: "Group ID", Width: 30},
 		{Title: "State", Width: 15},
@@ -226,7 +237,7 @@ func (m *Model) updateConsumersTable(groups []map[string]interface{}) {
 		// Parse group data and add rows
 		// This is a placeholder - actual implementation depends on kafkactl output structure
 		groupId := "-"
-		if id, ok := group["metadata"].(map[string]interface{})["name"].(string); ok {
+		if id, ok := group["metadata"].(map[string]any)["name"].(string); ok {
 			groupId = id
 		}
 		rows = append(rows, table.Row{groupId, "Stable", "3", "0"})
@@ -235,9 +246,9 @@ func (m *Model) updateConsumersTable(groups []map[string]interface{}) {
 	m.consumersTable.SetRows(rows)
 }
 
-// Command messages
+// Command messages.
 type topicsLoadedMsg struct {
-	topics []map[string]interface{}
+	topics []map[string]any
 	err    error
 }
 
@@ -246,7 +257,7 @@ type topicDetailMsg struct {
 }
 
 type consumerGroupsMsg struct {
-	groups []map[string]interface{}
+	groups []map[string]any
 }
 
 func (m *Model) loadTopics() tea.Msg {
@@ -280,6 +291,10 @@ func (m *Model) loadConsumerGroups() tea.Msg {
 	}
 
 	topicName := selectedRow[0]
-	groups, _ := m.client.GetConsumerGroups(topicName)
+	groups, err := m.client.GetConsumerGroups(topicName)
+	if err != nil {
+		return nil
+	}
+
 	return consumerGroupsMsg{groups: groups}
 }

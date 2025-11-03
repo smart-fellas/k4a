@@ -7,11 +7,11 @@ import (
 )
 
 func TestExtractValue(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"name": "test",
-		"nested": map[string]interface{}{
+		"nested": map[string]any{
 			"value": "nested-value",
-			"deep": map[string]interface{}{
+			"deep": map[string]any{
 				"item": "deep-value",
 			},
 		},
@@ -21,7 +21,7 @@ func TestExtractValue(t *testing.T) {
 	tests := []struct {
 		name    string
 		path    string
-		want    interface{}
+		want    any
 		wantErr bool
 	}{
 		{
@@ -75,9 +75,9 @@ func TestExtractValue(t *testing.T) {
 }
 
 func TestExtractString(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"name": "test",
-		"nested": map[string]interface{}{
+		"nested": map[string]any{
 			"value": "nested-value",
 		},
 		"count": 42,
@@ -126,11 +126,11 @@ func TestExtractString(t *testing.T) {
 }
 
 func TestExtractInt(t *testing.T) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"count":      42,
 		"countInt64": int64(100),
 		"countFloat": 3.14,
-		"nested": map[string]interface{}{
+		"nested": map[string]any{
 			"number": 99,
 		},
 		"notANumber": "string",
@@ -191,24 +191,24 @@ func TestExtractInt(t *testing.T) {
 }
 
 func TestFilterResources(t *testing.T) {
-	resources := []map[string]interface{}{
+	resources := []map[string]any{
 		{
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "kafka-topic-1",
 			},
 		},
 		{
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "kafka-topic-2",
 			},
 		},
 		{
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "redis-queue",
 			},
 		},
 		{
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": "kafka-stream",
 			},
 		},

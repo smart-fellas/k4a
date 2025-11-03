@@ -55,12 +55,12 @@ func New(cfg *config.Config) Model {
 	client := kafkactl.NewClient(cfg)
 
 	// Get current context details
-	ctx, _ := cfg.GetCurrentContext()
+	ctx, err := cfg.GetCurrentContext()
 	contextName := cfg.CurrentContext
 	namespace := ""
 	api := ""
 
-	if ctx != nil {
+	if err == nil && ctx != nil {
 		namespace = ctx.Context.Namespace
 		api = ctx.Context.API
 	}
@@ -156,17 +156,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.currentView {
 	case TopicsView:
 		newView, cmd := m.topicsView.Update(msg)
-		m.topicsView = newView.(topics.Model)
+		if tv, ok := newView.(topics.Model); ok {
+			m.topicsView = tv
+		}
 		cmds = append(cmds, cmd)
 
 	case SchemasView:
 		newView, cmd := m.schemasView.Update(msg)
-		m.schemasView = newView.(schemas.Model)
+		if sv, ok := newView.(schemas.Model); ok {
+			m.schemasView = sv
+		}
 		cmds = append(cmds, cmd)
 
 	case ConnectorsView:
 		newView, cmd := m.connectorsView.Update(msg)
-		m.connectorsView = newView.(connectors.Model)
+		if cv, ok := newView.(connectors.Model); ok {
+			m.connectorsView = cv
+		}
 		cmds = append(cmds, cmd)
 	}
 
@@ -206,15 +212,15 @@ func (m *Model) switchView(view ViewType) {
 	switch view {
 	case ConnectorsView:
 		m.footer.SetKeybindings([]footer.Keybinding{
-			{"↑↓", "navigate"},
-			{"enter", "select"},
-			{"d", "describe"},
-			{"p", "pause"},
-			{"r", "resume"},
-			{"R", "restart"},
-			{":", "command"},
-			{"?", "help"},
-			{"q", "quit"},
+			{Key: "↑↓", Desc: "navigate"},
+			{Key: "enter", Desc: "select"},
+			{Key: "d", Desc: "describe"},
+			{Key: "p", Desc: "pause"},
+			{Key: "r", Desc: "resume"},
+			{Key: "R", Desc: "restart"},
+			{Key: ":", Desc: "command"},
+			{Key: "?", Desc: "help"},
+			{Key: "q", Desc: "quit"},
 		})
 	default:
 		m.footer.SetKeybindings(footer.DefaultKeybindings())

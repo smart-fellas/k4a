@@ -82,9 +82,9 @@ name: another-valid-topic`,
 				}
 			}
 
-			var results []map[string]interface{}
+			var results []map[string]any
 			for _, doc := range docs {
-				var item map[string]interface{}
+				var item map[string]any
 				if err := yaml.Unmarshal([]byte(doc), &item); err == nil && item != nil {
 					results = append(results, item)
 				}

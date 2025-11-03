@@ -5,15 +5,20 @@ import (
 )
 
 var (
-	// Colors
-	Primary   = lipgloss.Color("229")
+	// Primary color for main UI elements.
+	Primary = lipgloss.Color("229")
+	// Secondary color for secondary UI elements.
 	Secondary = lipgloss.Color("86")
-	Success   = lipgloss.Color("42")
-	Warning   = lipgloss.Color("214")
-	Error     = lipgloss.Color("196")
-	Muted     = lipgloss.Color("241")
+	// Success color for success states.
+	Success = lipgloss.Color("42")
+	// Warning color for warning states.
+	Warning = lipgloss.Color("214")
+	// Error color for error states.
+	Error = lipgloss.Color("196")
+	// Muted color for muted text.
+	Muted = lipgloss.Color("241")
 
-	// Table Styles
+	// TableHeader style for table headers.
 	TableHeader = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(Primary).
@@ -21,28 +26,33 @@ var (
 			BorderBottom(true).
 			BorderForeground(Muted)
 
+	// TableSelected style for selected table rows.
 	TableSelected = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("229")).
 			Background(lipgloss.Color("57"))
 
-	// Status Styles
+	// StatusRunning style for running status.
 	StatusRunning = lipgloss.NewStyle().
 			Foreground(Success)
 
+	// StatusPaused style for paused status.
 	StatusPaused = lipgloss.NewStyle().
 			Foreground(Warning)
 
+	// StatusFailed style for failed status.
 	StatusFailed = lipgloss.NewStyle().
 			Foreground(Error)
 
-	// General Styles
+	// Title style for titles.
 	Title = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(Primary)
 
+	// Subtitle style for subtitles.
 	Subtitle = lipgloss.NewStyle().
 			Foreground(Secondary)
 
+	// MutedText style for muted text.
 	MutedText = lipgloss.NewStyle().
 			Foreground(Muted)
 )

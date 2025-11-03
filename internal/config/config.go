@@ -32,13 +32,14 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var rawConfig map[string]interface{}
-	if err := yaml.Unmarshal(data, &rawConfig); err != nil {
+	var rawConfig map[string]any
+	err = yaml.Unmarshal(data, &rawConfig)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	// Extract kafkactl configuration
-	kafkactlConfig, ok := rawConfig["kafkactl"].(map[string]interface{})
+	kafkactlConfig, ok := rawConfig["kafkactl"].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("kafkactl configuration not found")
 	}
@@ -49,7 +50,8 @@ func Load() (*Config, error) {
 	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(configData, &cfg); err != nil {
+	err = yaml.Unmarshal(configData, &cfg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
@@ -90,12 +92,12 @@ func (c *Config) Save() error {
 
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
 	// Wrap config in kafkactl key
-	wrapped := map[string]interface{}{
+	wrapped := map[string]any{
 		"kafkactl": c,
 	}
 
@@ -104,7 +106,8 @@ func (c *Config) Save() error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	err = os.WriteFile(configPath, data, 0o600)
+	if err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

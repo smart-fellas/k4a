@@ -15,7 +15,7 @@ import (
 type Model struct {
 	client  *kafkactl.Client
 	table   table.Model
-	schemas []map[string]interface{}
+	schemas []map[string]any
 	keys    keys.KeyMap
 	width   int
 	height  int
@@ -140,25 +140,32 @@ func (m *Model) updateTable() {
 	rows := []table.Row{}
 
 	for _, schema := range m.schemas {
-		metadata := schema["metadata"].(map[string]interface{})
+		metadata, ok := schema["metadata"].(map[string]any)
+		if !ok {
+			continue
+		}
 
-		subject := metadata["name"].(string)
+		subject, ok := metadata["name"].(string)
+		if !ok {
+			continue
+		}
+
 		version := "latest"
 		id := "-"
 		schemaType := "AVRO"
 		compatibility := "BACKWARD"
 
-		if spec, ok := schema["spec"].(map[string]interface{}); ok {
-			if v, ok := spec["version"]; ok {
+		if spec, specOk := schema["spec"].(map[string]any); specOk {
+			if v, versionOk := spec["version"]; versionOk {
 				version = fmt.Sprintf("%v", v)
 			}
-			if i, ok := spec["id"]; ok {
+			if i, idOk := spec["id"]; idOk {
 				id = fmt.Sprintf("%v", i)
 			}
-			if t, ok := spec["type"]; ok {
+			if t, typeOk := spec["type"]; typeOk {
 				schemaType = fmt.Sprintf("%v", t)
 			}
-			if c, ok := spec["compatibility"]; ok {
+			if c, compatOk := spec["compatibility"]; compatOk {
 				compatibility = fmt.Sprintf("%v", c)
 			}
 		}
@@ -176,7 +183,7 @@ func (m *Model) updateTable() {
 }
 
 type schemasLoadedMsg struct {
-	schemas []map[string]interface{}
+	schemas []map[string]any
 	err     error
 }
 

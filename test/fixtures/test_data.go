@@ -1,6 +1,6 @@
 package fixtures
 
-// TestConfig contains test configuration data
+// TestConfig contains test configuration data.
 const TestConfig = `
 current-context: test
 contexts:
@@ -15,7 +15,7 @@ contexts:
     schema-registry: https://schema-registry.prod.example.com
 `
 
-// TestTopicsList contains mock kafkactl output for topics
+// TestTopicsList contains mock kafkactl output for topics.
 const TestTopicsList = `
 - name: test-topic-1
   partitions: 3
@@ -25,7 +25,7 @@ const TestTopicsList = `
   replication-factor: 2
 `
 
-// TestSchemasList contains mock kafkactl output for schemas
+// TestSchemasList contains mock kafkactl output for schemas.
 const TestSchemasList = `
 - subject: test-subject-value
   version: 1

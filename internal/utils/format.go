@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// FormatBytes formats bytes to human readable format
+// FormatBytes formats bytes to human readable format.
 func FormatBytes(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {
@@ -22,7 +22,7 @@ func FormatBytes(bytes int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// FormatDuration formats milliseconds to human readable duration
+// FormatDuration formats milliseconds to human readable duration.
 func FormatDuration(ms int64) string {
 	duration := time.Duration(ms) * time.Millisecond
 
@@ -40,7 +40,7 @@ func FormatDuration(ms int64) string {
 	}
 }
 
-// TruncateString truncates string to specified length
+// TruncateString truncates string to specified length.
 func TruncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
@@ -53,7 +53,7 @@ func TruncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
-// PadRight pads string with spaces to the right
+// PadRight pads string with spaces to the right.
 func PadRight(s string, length int) string {
 	if len(s) >= length {
 		return s

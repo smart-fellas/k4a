@@ -17,9 +17,6 @@ type Model struct {
 }
 
 var (
-	headerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("229"))
-
 	asciiStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("86")).
 			Bold(true)

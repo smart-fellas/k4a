@@ -27,6 +27,7 @@ func main() {
 		fmt.Printf("built at: %s\n", date)
 		os.Exit(0)
 	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
@@ -39,8 +40,8 @@ func main() {
 		tea.WithMouseCellMotion(),
 	)
 
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error running program: %v\n", err)
+	if _, runErr := p.Run(); runErr != nil {
+		fmt.Printf("Error running program: %v\n", runErr)
 		os.Exit(1)
 	}
 }

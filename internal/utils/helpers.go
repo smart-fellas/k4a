@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// ExtractValue safely extracts a value from nested maps
-func ExtractValue(data map[string]interface{}, path string) (interface{}, error) {
+// ExtractValue safely extracts a value from nested maps.
+func ExtractValue(data map[string]any, path string) (any, error) {
 	keys := strings.Split(path, ".")
 	current := data
 
@@ -18,7 +18,7 @@ func ExtractValue(data map[string]interface{}, path string) (interface{}, error)
 			return nil, fmt.Errorf("key %s not found", key)
 		}
 
-		if next, ok := current[key].(map[string]interface{}); ok {
+		if next, ok := current[key].(map[string]any); ok {
 			current = next
 		} else {
 			return nil, fmt.Errorf("invalid path at %s", key)
@@ -28,8 +28,8 @@ func ExtractValue(data map[string]interface{}, path string) (interface{}, error)
 	return nil, fmt.Errorf("path %s not found", path)
 }
 
-// ExtractString safely extracts a string value from nested maps
-func ExtractString(data map[string]interface{}, path string, defaultValue string) string {
+// ExtractString safely extracts a string value from nested maps.
+func ExtractString(data map[string]any, path, defaultValue string) string {
 	val, err := ExtractValue(data, path)
 	if err != nil {
 		return defaultValue
@@ -42,8 +42,8 @@ func ExtractString(data map[string]interface{}, path string, defaultValue string
 	return fmt.Sprintf("%v", val)
 }
 
-// ExtractInt safely extracts an int value from nested maps
-func ExtractInt(data map[string]interface{}, path string, defaultValue int) int {
+// ExtractInt safely extracts an int value from nested maps.
+func ExtractInt(data map[string]any, path string, defaultValue int) int {
 	val, err := ExtractValue(data, path)
 	if err != nil {
 		return defaultValue
@@ -61,14 +61,14 @@ func ExtractInt(data map[string]interface{}, path string, defaultValue int) int 
 	}
 }
 
-// FilterResources filters resources based on a search string
-func FilterResources(resources []map[string]interface{}, search string) []map[string]interface{} {
+// FilterResources filters resources based on a search string.
+func FilterResources(resources []map[string]any, search string) []map[string]any {
 	if search == "" {
 		return resources
 	}
 
 	search = strings.ToLower(search)
-	var filtered []map[string]interface{}
+	var filtered []map[string]any
 
 	for _, resource := range resources {
 		name := ExtractString(resource, "metadata.name", "")

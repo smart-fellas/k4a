@@ -17,7 +17,7 @@ import (
 type Model struct {
 	client     *kafkactl.Client
 	table      table.Model
-	connectors []map[string]interface{}
+	connectors []map[string]any
 	keys       keys.KeyMap
 	width      int
 	height     int
@@ -159,10 +159,20 @@ func (m *Model) updateTable() {
 	rows := []table.Row{}
 
 	for _, connector := range m.connectors {
-		metadata := connector["metadata"].(map[string]interface{})
-		spec := connector["spec"].(map[string]interface{})
+		metadata, ok := connector["metadata"].(map[string]any)
+		if !ok {
+			continue
+		}
 
-		name := metadata["name"].(string)
+		spec, ok := connector["spec"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		name, ok := metadata["name"].(string)
+		if !ok {
+			continue
+		}
 
 		connectorClass := "-"
 		connectorType := "source"
@@ -170,19 +180,19 @@ func (m *Model) updateTable() {
 		tasks := "1"
 		cluster := "-"
 
-		if config, ok := spec["config"].(map[string]interface{}); ok {
-			if class, ok := config["connector.class"].(string); ok {
+		if config, configOk := spec["config"].(map[string]any); configOk {
+			if class, classOk := config["connector.class"].(string); classOk {
 				connectorClass = class
 				if strings.Contains(strings.ToLower(class), "sink") {
 					connectorType = "sink"
 				}
 			}
-			if t, ok := config["tasks.max"]; ok {
+			if t, tasksOk := config["tasks.max"]; tasksOk {
 				tasks = fmt.Sprintf("%v", t)
 			}
 		}
 
-		if c, ok := spec["connectCluster"].(string); ok {
+		if c, clusterOk := spec["connectCluster"].(string); clusterOk {
 			cluster = c
 		}
 
@@ -202,7 +212,7 @@ func (m *Model) updateTable() {
 }
 
 type connectorsLoadedMsg struct {
-	connectors []map[string]interface{}
+	connectors []map[string]any
 	err        error
 }
 

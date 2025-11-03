@@ -11,12 +11,10 @@ type Model struct {
 	submitted bool
 }
 
-var (
-	commandStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("235")).
-		Padding(0, 1)
-)
+var commandStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("229")).
+	Background(lipgloss.Color("235")).
+	Padding(0, 1)
 
 func New() Model {
 	ti := textinput.New()

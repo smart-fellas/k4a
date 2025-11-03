@@ -2,21 +2,21 @@ package models
 
 import "time"
 
-// Resource is the base interface for all Kafka resources
+// Resource is the base interface for all Kafka resources.
 type Resource interface {
 	GetName() string
 	GetKind() string
 	GetNamespace() string
 }
 
-// BaseResource contains common fields for all resources
+// BaseResource contains common fields for all resources.
 type BaseResource struct {
 	APIVersion string           `yaml:"apiVersion" json:"apiVersion"`
 	Kind       string           `yaml:"kind" json:"kind"`
 	Metadata   ResourceMetadata `yaml:"metadata" json:"metadata"`
 }
 
-// ResourceMetadata contains metadata for resources
+// ResourceMetadata contains metadata for resources.
 type ResourceMetadata struct {
 	Name        string            `yaml:"name" json:"name"`
 	Namespace   string            `yaml:"namespace,omitempty" json:"namespace,omitempty"`
@@ -26,14 +26,14 @@ type ResourceMetadata struct {
 	UpdatedAt   *time.Time        `yaml:"updatedAt,omitempty" json:"updatedAt,omitempty"`
 }
 
-func (r BaseResource) GetName() string {
+func (r *BaseResource) GetName() string {
 	return r.Metadata.Name
 }
 
-func (r BaseResource) GetKind() string {
+func (r *BaseResource) GetKind() string {
 	return r.Kind
 }
 
-func (r BaseResource) GetNamespace() string {
+func (r *BaseResource) GetNamespace() string {
 	return r.Metadata.Namespace
 }

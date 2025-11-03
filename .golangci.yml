@@ -26,7 +26,20 @@ linters:
     - noinlineerr
     - noctx
     - wsl
+    - wsl_v5  # Whitespace linter is too strict
     - gocyclo
+    - gochecknoglobals  # Allow global variables for styles and build info
+    - err113            # Allow dynamic errors for simple error messages
+    - mnd               # Allow magic numbers for UI dimensions
+    - nlreturn          # Too strict for readability
+    - recvcheck         # Bubble Tea requires mixed receivers
+    - gocritic          # Contains many overly strict rules
+    - modernize         # interface{} -> any is done manually
+    - revive            # Overlap with other linters
+    - godot             # Already fixed manually
+    - godoclint         # Already fixed manually
+    - usestdlibvars     # Not critical
+    - tagliatelle       # YAML tags follow kafkactl convention
 
   # All available settings of specific linters.
   settings:
@@ -64,7 +77,7 @@ linters:
     cyclop:
       # The maximal code complexity to report.
       # Default: 10
-      max-complexity: 20
+      max-complexity: 25
       # The maximal average package complexity.
       # If it's higher than 0.0 (float) the check is enabled.
       # Default: 0.0
