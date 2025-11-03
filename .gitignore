@@ -13,6 +13,7 @@ dist/
 # Output of the go coverage tool
 *.out
 coverage.txt
+coverage.html
 
 # Go workspace file
 go.work

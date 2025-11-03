@@ -69,8 +69,8 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      - name: Run all tests
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./test/...
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

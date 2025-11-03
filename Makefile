@@ -1,4 +1,4 @@
-.PHONY: build run clean test install build-all release
+.PHONY: build run clean test test-unit test-integration test-coverage test-short install build-all release fmt lint deps dev
 
 BINARY_NAME=k4a
 MAIN_PATH=cmd/k4a/main.go
@@ -33,7 +33,20 @@ clean:
 	rm -f bin/$(BINARY_NAME)
 
 test:
-	go test ./...
+	go test -v ./test/...
+
+test-unit:
+	go test -v ./test/unit/...
+
+test-integration:
+	go test -v ./test/integration/...
+
+test-coverage:
+	go test -v -race -coverprofile=coverage.txt -covermode=atomic ./test/...
+	go tool cover -html=coverage.txt -o coverage.html
+
+test-short:
+	go test -short -v ./test/...
 
 deps:
 	go mod download
