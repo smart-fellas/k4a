@@ -132,6 +132,8 @@ jobs:
         uses: actions/download-artifact@v6
         with:
           path: artifacts
+          pattern: 'k4a-*'
+
 
       - name: Prepare release assets
         run: |
