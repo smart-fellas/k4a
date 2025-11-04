@@ -1,7 +1,7 @@
 # K4A 
 A terminal UI for Kafka management using [kafkactl](https://github.com/michelin/kafkactl), inspired by [k9s](https://k9scli.io/).
 
-![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)
+![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
 [![CI](https://github.com/smart-fellas/k4a/actions/workflows/ci.yml/badge.svg)](https://github.com/smart-fellas/k4a/actions/workflows/ci.yml)
 [![Release](https://github.com/smart-fellas/k4a/actions/workflows/release.yml/badge.svg)](https://github.com/smart-fellas/k4a/actions/workflows/release.yml)
@@ -22,7 +22,7 @@ A terminal UI for Kafka management using [kafkactl](https://github.com/michelin/
 ### Prerequisites
 
 - [kafkactl](https://github.com/michelin/kafkactl) installed and configured
-- Go 1.21+ (for building from source)
+- Go 1.25+ (for building from source)
 
 ### Download Pre-built Binary
 
