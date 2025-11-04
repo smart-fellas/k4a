@@ -1,5 +1,4 @@
-# K4A - Kafka for All
-
+# K4A 
 A terminal UI for Kafka management using [kafkactl](https://github.com/michelin/kafkactl), inspired by [k9s](https://k9scli.io/).
 
 ![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)
