@@ -26,9 +26,11 @@ jobs:
         id: git-cliff
         with:
           config: .github/cliff.toml
-          args: --verbose --latest --strip header
+          args: --github-repo "smart-fellas/k4a" --verbose --latest --strip header
         env:
           OUTPUT: CHANGES.md
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
   build-release:
     name: Build Release Binaries
