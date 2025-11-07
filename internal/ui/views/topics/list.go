@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/smart-fellas/k4a/internal/cache"
 	"github.com/smart-fellas/k4a/internal/kafkactl"
-	"github.com/smart-fellas/k4a/internal/ui/components/dialog"
+	"github.com/smart-fellas/k4a/internal/ui/components/describe"
 	"github.com/smart-fellas/k4a/internal/ui/keys"
 	"gopkg.in/yaml.v3"
 )
@@ -25,9 +25,9 @@ type Model struct {
 	loading bool
 	err     error
 
-	// Detail view
-	showDetail   bool
-	detailDialog dialog.Model
+	// Describe view
+	showDescribe bool
+	describeView describe.Model
 
 	// Consumer groups view
 	showConsumers  bool
@@ -69,7 +69,7 @@ func New(client *kafkactl.Client) Model {
 		client:          client,
 		table:           t,
 		keys:            keys.DefaultKeyMap(),
-		detailDialog:    dialog.New(),
+		describeView:    describe.New(),
 		refreshInterval: cache.DefaultRefreshInterval,
 	}
 }
@@ -84,18 +84,18 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	// Handle detail view
-	if m.showDetail {
+	// Handle describe view
+	if m.showDescribe {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			if key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) {
-				m.showDetail = false
+				m.showDescribe = false
 				return m, nil
 			}
 		}
 
-		newDialog, cmd := m.detailDialog.Update(msg)
-		m.detailDialog = newDialog
+		newDescribe, cmd := m.describeView.Update(msg)
+		m.describeView = newDescribe
 		return m, cmd
 	}
 
@@ -127,7 +127,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Describe):
 			// Show YAML detail
 			if len(m.topics) > 0 {
-				m.showDetail = true
+				m.showDescribe = true
 				return m, m.loadTopicDetail
 			}
 
@@ -151,8 +151,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateTable()
 
 	case topicDetailMsg:
-		m.detailDialog.SetContent(msg.yaml)
-		m.showDetail = true
+		m.describeView.SetContent(msg.yaml)
+		m.describeView.SetResource(msg.name, "Topic")
+		m.describeView.SetSize(m.width, m.height)
+		m.showDescribe = true
 
 	case consumerGroupsMsg:
 		m.updateConsumersTable(msg.groups)
@@ -167,8 +169,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.showDetail {
-		return m.detailDialog.View()
+	if m.showDescribe {
+		return m.describeView.View()
 	}
 
 	if m.showConsumers {
@@ -190,6 +192,7 @@ func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.table.SetHeight(height - 2)
+	m.describeView.SetSize(width, height)
 }
 
 func (m *Model) updateTable() {
@@ -274,6 +277,7 @@ type topicsLoadedMsg struct {
 }
 
 type topicDetailMsg struct {
+	name string
 	yaml string
 }
 
@@ -320,16 +324,16 @@ func (m *Model) loadTopicDetail() tea.Msg {
 	}
 
 	if topicData == nil {
-		return topicDetailMsg{yaml: fmt.Sprintf("Topic '%s' not found in cache", topicName)}
+		return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Topic '%s' not found in cache", topicName)}
 	}
 
 	// Convert the topic data back to YAML
 	yamlBytes, err := yaml.Marshal(topicData)
 	if err != nil {
-		return topicDetailMsg{yaml: fmt.Sprintf("Error serializing topic details: %v", err)}
+		return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Error serializing topic details: %v", err)}
 	}
 
-	return topicDetailMsg{yaml: string(yamlBytes)}
+	return topicDetailMsg{name: topicName, yaml: string(yamlBytes)}
 }
 
 func (m *Model) loadConsumerGroups(forceRefresh bool) tea.Cmd {

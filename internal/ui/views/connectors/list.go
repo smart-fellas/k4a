@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/smart-fellas/k4a/internal/cache"
 	"github.com/smart-fellas/k4a/internal/kafkactl"
-	"github.com/smart-fellas/k4a/internal/ui/components/dialog"
+	"github.com/smart-fellas/k4a/internal/ui/components/describe"
 	"github.com/smart-fellas/k4a/internal/ui/keys"
 	"github.com/smart-fellas/k4a/internal/ui/styles"
 	"gopkg.in/yaml.v3"
@@ -27,9 +27,9 @@ type Model struct {
 	loading    bool
 	err        error
 
-	// Detail view
-	showDetail   bool
-	detailDialog dialog.Model
+	// Describe view
+	showDescribe bool
+	describeView describe.Model
 
 	// Auto-refresh
 	refreshInterval time.Duration
@@ -68,7 +68,7 @@ func New(client *kafkactl.Client) Model {
 		client:          client,
 		table:           t,
 		keys:            keys.DefaultKeyMap(),
-		detailDialog:    dialog.New(),
+		describeView:    describe.New(),
 		refreshInterval: cache.DefaultRefreshInterval,
 	}
 }
@@ -83,18 +83,18 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	// Handle detail view
-	if m.showDetail {
+	// Handle describe view
+	if m.showDescribe {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			if key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) {
-				m.showDetail = false
+				m.showDescribe = false
 				return m, nil
 			}
 		}
 
-		newDialog, cmd := m.detailDialog.Update(msg)
-		m.detailDialog = newDialog
+		newDescribe, cmd := m.describeView.Update(msg)
+		m.describeView = newDescribe
 		return m, cmd
 	}
 
@@ -103,7 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Describe):
 			if len(m.connectors) > 0 {
-				m.showDetail = true
+				m.showDescribe = true
 				return m, m.loadConnectorDetail
 			}
 
@@ -139,8 +139,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateTable()
 
 	case connectorDetailMsg:
-		m.detailDialog.SetContent(msg.yaml)
-		m.showDetail = true
+		m.describeView.SetContent(msg.yaml)
+		m.describeView.SetResource(msg.name, "Connector")
+		m.describeView.SetSize(m.width, m.height)
+		m.showDescribe = true
 
 	case connectorActionMsg:
 		// Refresh after action
@@ -155,8 +157,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.showDetail {
-		return m.detailDialog.View()
+	if m.showDescribe {
+		return m.describeView.View()
 	}
 
 	if m.loading {
@@ -174,6 +176,7 @@ func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.table.SetHeight(height - 2)
+	m.describeView.SetSize(width, height)
 }
 
 func (m *Model) updateTable() {
@@ -238,6 +241,7 @@ type connectorsLoadedMsg struct {
 }
 
 type connectorDetailMsg struct {
+	name string
 	yaml string
 }
 
@@ -288,16 +292,16 @@ func (m *Model) loadConnectorDetail() tea.Msg {
 	}
 
 	if connectorData == nil {
-		return connectorDetailMsg{yaml: fmt.Sprintf("Connector '%s' not found in cache", connectorName)}
+		return connectorDetailMsg{name: connectorName, yaml: fmt.Sprintf("Connector '%s' not found in cache", connectorName)}
 	}
 
 	// Convert the connector data back to YAML
 	yamlBytes, err := yaml.Marshal(connectorData)
 	if err != nil {
-		return connectorDetailMsg{yaml: fmt.Sprintf("Error serializing connector details: %v", err)}
+		return connectorDetailMsg{name: connectorName, yaml: fmt.Sprintf("Error serializing connector details: %v", err)}
 	}
 
-	return connectorDetailMsg{yaml: string(yamlBytes)}
+	return connectorDetailMsg{name: connectorName, yaml: string(yamlBytes)}
 }
 
 func (m *Model) pauseConnector() tea.Msg {
