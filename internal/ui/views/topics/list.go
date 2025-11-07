@@ -2,14 +2,17 @@ package topics
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/smart-fellas/k4a/internal/cache"
 	"github.com/smart-fellas/k4a/internal/kafkactl"
 	"github.com/smart-fellas/k4a/internal/ui/components/dialog"
 	"github.com/smart-fellas/k4a/internal/ui/keys"
+	"gopkg.in/yaml.v3"
 )
 
 type Model struct {
@@ -29,6 +32,10 @@ type Model struct {
 	// Consumer groups view
 	showConsumers  bool
 	consumersTable table.Model
+
+	// Auto-refresh
+	refreshInterval time.Duration
+	lastRefresh     time.Time
 }
 
 func New(client *kafkactl.Client) Model {
@@ -59,15 +66,19 @@ func New(client *kafkactl.Client) Model {
 	t.SetStyles(s)
 
 	return Model{
-		client:       client,
-		table:        t,
-		keys:         keys.DefaultKeyMap(),
-		detailDialog: dialog.New(),
+		client:          client,
+		table:           t,
+		keys:            keys.DefaultKeyMap(),
+		detailDialog:    dialog.New(),
+		refreshInterval: cache.DefaultRefreshInterval,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.loadTopics
+	return tea.Batch(
+		m.loadTopics(false),
+		m.tickRefresh(),
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -110,7 +121,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Show consumer groups for selected topic
 			if len(m.topics) > 0 {
 				m.showConsumers = true
-				return m, m.loadConsumerGroups
+				return m, m.loadConsumerGroups(false)
 			}
 
 		case key.Matches(msg, m.keys.Describe):
@@ -121,12 +132,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, m.keys.Refresh):
-			return m, m.loadTopics
+			// Check if it's Shift+R (force refresh)
+			forceRefresh := msg.String() == "R"
+			return m, m.loadTopics(forceRefresh)
 		}
+
+	case tickRefreshMsg:
+		// Auto-refresh timer tick
+		return m, tea.Batch(
+			m.loadTopics(false),
+			m.tickRefresh(),
+		)
 
 	case topicsLoadedMsg:
 		m.topics = msg.topics
 		m.loading = false
+		m.lastRefresh = time.Now()
 		m.updateTable()
 
 	case topicDetailMsg:
@@ -260,9 +281,19 @@ type consumerGroupsMsg struct {
 	groups []map[string]any
 }
 
-func (m *Model) loadTopics() tea.Msg {
-	topics, err := m.client.GetTopics()
-	return topicsLoadedMsg{topics: topics, err: err}
+type tickRefreshMsg time.Time
+
+func (m *Model) tickRefresh() tea.Cmd {
+	return tea.Tick(m.refreshInterval, func(t time.Time) tea.Msg {
+		return tickRefreshMsg(t)
+	})
+}
+
+func (m *Model) loadTopics(forceRefresh bool) tea.Cmd {
+	return func() tea.Msg {
+		topics, err := m.client.GetTopics(forceRefresh)
+		return topicsLoadedMsg{topics: topics, err: err}
+	}
 }
 
 func (m *Model) loadTopicDetail() tea.Msg {
@@ -276,25 +307,44 @@ func (m *Model) loadTopicDetail() tea.Msg {
 	}
 
 	topicName := selectedRow[0]
-	yaml, err := m.client.GetResourceYAML("topic", topicName)
-	if err != nil {
-		return topicDetailMsg{yaml: fmt.Sprintf("Error loading topic details: %v", err)}
+
+	// Find the topic in the cached list
+	var topicData map[string]any
+	for _, topic := range m.topics {
+		if metadata, ok := topic["metadata"].(map[string]any); ok {
+			if name, ok := metadata["name"].(string); ok && name == topicName {
+				topicData = topic
+				break
+			}
+		}
 	}
 
-	return topicDetailMsg{yaml: yaml}
+	if topicData == nil {
+		return topicDetailMsg{yaml: fmt.Sprintf("Topic '%s' not found in cache", topicName)}
+	}
+
+	// Convert the topic data back to YAML
+	yamlBytes, err := yaml.Marshal(topicData)
+	if err != nil {
+		return topicDetailMsg{yaml: fmt.Sprintf("Error serializing topic details: %v", err)}
+	}
+
+	return topicDetailMsg{yaml: string(yamlBytes)}
 }
 
-func (m *Model) loadConsumerGroups() tea.Msg {
-	selectedRow := m.table.SelectedRow()
-	if len(selectedRow) == 0 {
-		return nil
-	}
+func (m *Model) loadConsumerGroups(forceRefresh bool) tea.Cmd {
+	return func() tea.Msg {
+		selectedRow := m.table.SelectedRow()
+		if len(selectedRow) == 0 {
+			return nil
+		}
 
-	topicName := selectedRow[0]
-	groups, err := m.client.GetConsumerGroups(topicName)
-	if err != nil {
-		return nil
-	}
+		topicName := selectedRow[0]
+		groups, err := m.client.GetConsumerGroups(topicName, forceRefresh)
+		if err != nil {
+			return nil
+		}
 
-	return consumerGroupsMsg{groups: groups}
+		return consumerGroupsMsg{groups: groups}
+	}
 }

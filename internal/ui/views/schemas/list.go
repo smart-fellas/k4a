@@ -2,14 +2,17 @@ package schemas
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/smart-fellas/k4a/internal/cache"
 	"github.com/smart-fellas/k4a/internal/kafkactl"
 	"github.com/smart-fellas/k4a/internal/ui/components/dialog"
 	"github.com/smart-fellas/k4a/internal/ui/keys"
+	"gopkg.in/yaml.v3"
 )
 
 type Model struct {
@@ -25,6 +28,10 @@ type Model struct {
 	// Detail view
 	showDetail   bool
 	detailDialog dialog.Model
+
+	// Auto-refresh
+	refreshInterval time.Duration
+	lastRefresh     time.Time
 }
 
 func New(client *kafkactl.Client) Model {
@@ -55,15 +62,19 @@ func New(client *kafkactl.Client) Model {
 	t.SetStyles(s)
 
 	return Model{
-		client:       client,
-		table:        t,
-		keys:         keys.DefaultKeyMap(),
-		detailDialog: dialog.New(),
+		client:          client,
+		table:           t,
+		keys:            keys.DefaultKeyMap(),
+		detailDialog:    dialog.New(),
+		refreshInterval: cache.DefaultRefreshInterval,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.loadSchemas
+	return tea.Batch(
+		m.loadSchemas(false),
+		m.tickRefresh(),
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -94,12 +105,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, m.keys.Refresh):
-			return m, m.loadSchemas
+			// Check if it's Shift+R (force refresh)
+			forceRefresh := msg.String() == "R"
+			return m, m.loadSchemas(forceRefresh)
 		}
+
+	case tickRefreshMsg:
+		// Auto-refresh timer tick
+		return m, tea.Batch(
+			m.loadSchemas(false),
+			m.tickRefresh(),
+		)
 
 	case schemasLoadedMsg:
 		m.schemas = msg.schemas
 		m.loading = false
+		m.lastRefresh = time.Now()
 		m.updateTable()
 
 	case schemaDetailMsg:
@@ -191,9 +212,19 @@ type schemaDetailMsg struct {
 	yaml string
 }
 
-func (m *Model) loadSchemas() tea.Msg {
-	schemas, err := m.client.GetSchemas()
-	return schemasLoadedMsg{schemas: schemas, err: err}
+type tickRefreshMsg time.Time
+
+func (m *Model) tickRefresh() tea.Cmd {
+	return tea.Tick(m.refreshInterval, func(t time.Time) tea.Msg {
+		return tickRefreshMsg(t)
+	})
+}
+
+func (m *Model) loadSchemas(forceRefresh bool) tea.Cmd {
+	return func() tea.Msg {
+		schemas, err := m.client.GetSchemas(forceRefresh)
+		return schemasLoadedMsg{schemas: schemas, err: err}
+	}
 }
 
 func (m *Model) loadSchemaDetail() tea.Msg {
@@ -207,10 +238,27 @@ func (m *Model) loadSchemaDetail() tea.Msg {
 	}
 
 	schemaName := selectedRow[0]
-	yaml, err := m.client.GetResourceYAML("schema", schemaName)
-	if err != nil {
-		return schemaDetailMsg{yaml: fmt.Sprintf("Error loading schema details: %v", err)}
+
+	// Find the schema in the cached list
+	var schemaData map[string]any
+	for _, schema := range m.schemas {
+		if metadata, ok := schema["metadata"].(map[string]any); ok {
+			if name, ok := metadata["name"].(string); ok && name == schemaName {
+				schemaData = schema
+				break
+			}
+		}
 	}
 
-	return schemaDetailMsg{yaml: yaml}
+	if schemaData == nil {
+		return schemaDetailMsg{yaml: fmt.Sprintf("Schema '%s' not found in cache", schemaName)}
+	}
+
+	// Convert the schema data back to YAML
+	yamlBytes, err := yaml.Marshal(schemaData)
+	if err != nil {
+		return schemaDetailMsg{yaml: fmt.Sprintf("Error serializing schema details: %v", err)}
+	}
+
+	return schemaDetailMsg{yaml: string(yamlBytes)}
 }
