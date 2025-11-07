@@ -44,7 +44,10 @@ func (c *Client) InvalidateCache() error {
 	if c.cache == nil {
 		return nil
 	}
-	return c.cache.InvalidateAll()
+	if err := c.cache.InvalidateAll(); err != nil {
+		return fmt.Errorf("failed to invalidate cache: %w", err)
+	}
+	return nil
 }
 
 // ExecuteCommand runs a kafkactl command and returns the output.
@@ -89,9 +92,9 @@ func (c *Client) executeCommandWithCache(resourceType string, forceRefresh bool,
 
 	// Save to cache
 	if c.useCache && c.cache != nil {
-		if err := c.cache.Set(resourceType, output, args...); err != nil {
+		if cacheErr := c.cache.Set(resourceType, output, args...); cacheErr != nil {
 			// Log error but don't fail the operation
-			fmt.Printf("Warning: failed to cache data: %v\n", err)
+			fmt.Printf("Warning: failed to cache data: %v\n", cacheErr)
 		}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -32,8 +33,8 @@ func NewManager() (*Manager, error) {
 	cacheDir := filepath.Join(homeDir, CacheDir)
 
 	// Create cache directory if it doesn't exist
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create cache directory: %w", err)
+	if mkdirErr := os.MkdirAll(cacheDir, 0o755); mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create cache directory: %w", mkdirErr)
 	}
 
 	return &Manager{
@@ -44,13 +45,15 @@ func NewManager() (*Manager, error) {
 // getCacheKey generates a cache key from resource type and context
 func (m *Manager) getCacheKey(resourceType string, args ...string) string {
 	// Create a unique key based on resource type and arguments
-	key := resourceType
+	var builder strings.Builder
+	builder.WriteString(resourceType)
 	for _, arg := range args {
-		key += "_" + arg
+		builder.WriteString("_")
+		builder.WriteString(arg)
 	}
 
 	// Hash the key to create a safe filename
-	hash := sha256.Sum256([]byte(key))
+	hash := sha256.Sum256([]byte(builder.String()))
 	return hex.EncodeToString(hash[:])
 }
 
@@ -92,7 +95,7 @@ func (m *Manager) Set(resourceType string, data []byte, args ...string) error {
 	cachePath := m.GetCachePath(resourceType, args...)
 
 	// Write data to cache file
-	if err := os.WriteFile(cachePath, data, 0644); err != nil {
+	if err := os.WriteFile(cachePath, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write cache file: %w", err)
 	}
 
@@ -121,8 +124,8 @@ func (m *Manager) InvalidateAll() error {
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			path := filepath.Join(m.cacheDir, entry.Name())
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("failed to remove cache file %s: %w", entry.Name(), err)
+			if removeErr := os.Remove(path); removeErr != nil {
+				return fmt.Errorf("failed to remove cache file %s: %w", entry.Name(), removeErr)
 			}
 		}
 	}

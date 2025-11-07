@@ -312,7 +312,7 @@ func (m *Model) loadTopicDetail() tea.Msg {
 	var topicData map[string]any
 	for _, topic := range m.topics {
 		if metadata, ok := topic["metadata"].(map[string]any); ok {
-			if name, ok := metadata["name"].(string); ok && name == topicName {
+			if name, nameOk := metadata["name"].(string); nameOk && name == topicName {
 				topicData = topic
 				break
 			}

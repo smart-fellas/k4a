@@ -243,7 +243,7 @@ func (m *Model) loadSchemaDetail() tea.Msg {
 	var schemaData map[string]any
 	for _, schema := range m.schemas {
 		if metadata, ok := schema["metadata"].(map[string]any); ok {
-			if name, ok := metadata["name"].(string); ok && name == schemaName {
+			if name, nameOk := metadata["name"].(string); nameOk && name == schemaName {
 				schemaData = schema
 				break
 			}

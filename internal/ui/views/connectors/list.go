@@ -280,7 +280,7 @@ func (m *Model) loadConnectorDetail() tea.Msg {
 	var connectorData map[string]any
 	for _, connector := range m.connectors {
 		if metadata, ok := connector["metadata"].(map[string]any); ok {
-			if name, ok := metadata["name"].(string); ok && name == connectorName {
+			if name, nameOk := metadata["name"].(string); nameOk && name == connectorName {
 				connectorData = connector
 				break
 			}
