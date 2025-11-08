@@ -5,6 +5,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/smart-fellas/k4a/internal/logger"
 )
 
 // Model represents a dedicated describe view for resource details
@@ -43,18 +44,23 @@ func New() Model {
 
 // SetContent sets the YAML content to display
 func (m *Model) SetContent(content string) {
+	logger.Debugf("describe.SetContent called with %d bytes of content", len(content))
+	logger.Debugf("Content preview (first 200 chars): %.200s", content)
 	m.content = content
 	m.viewport.SetContent(content)
+	logger.Debugf("Viewport content set, viewport height=%d, width=%d", m.viewport.Height, m.viewport.Width)
 }
 
 // SetResource sets the resource name and type for display
 func (m *Model) SetResource(name, resourceType string) {
+	logger.Debugf("describe.SetResource called: name=%s, type=%s", name, resourceType)
 	m.resourceName = name
 	m.resourceType = resourceType
 }
 
 // SetSize updates the viewport dimensions
 func (m *Model) SetSize(width, height int) {
+	logger.Debugf("describe.SetSize called: width=%d, height=%d", width, height)
 	m.width = width
 	m.height = height
 
@@ -64,9 +70,14 @@ func (m *Model) SetSize(width, height int) {
 	m.viewport.Width = width - 2 // Account for borders
 	m.viewport.Height = height - headerHeight - footerHeight
 
+	logger.Debugf("Viewport dimensions set: width=%d, height=%d", m.viewport.Width, m.viewport.Height)
+
 	// Always update content when resizing
 	if m.content != "" {
+		logger.Debugf("Re-setting viewport content (%d bytes)", len(m.content))
 		m.viewport.SetContent(m.content)
+	} else {
+		logger.Debugf("WARNING: No content to set in viewport")
 	}
 }
 
@@ -85,6 +96,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 // View renders the describe view
 func (m Model) View() string {
+	logger.Debugf("describe.View called: width=%d, height=%d, content_len=%d, resource=%s %s",
+		m.width, m.height, len(m.content), m.resourceType, m.resourceName)
+
 	// Title bar
 	title := titleStyle.Width(m.width).Render(
 		lipgloss.JoinHorizontal(
@@ -100,17 +114,23 @@ func (m Model) View() string {
 	)
 
 	// Viewport content
+	viewportView := m.viewport.View()
+	logger.Debugf("Viewport.View() returned %d bytes", len(viewportView))
+
 	viewportContent := viewportStyle.
 		Width(m.width - 2).
 		Height(m.viewport.Height).
-		Render(m.viewport.View())
+		Render(viewportView)
 
-	return lipgloss.JoinVertical(
+	result := lipgloss.JoinVertical(
 		lipgloss.Left,
 		title,
 		help,
 		viewportContent,
 	)
+
+	logger.Debugf("describe.View returning %d bytes", len(result))
+	return result
 }
 
 // KeyBindings for describe view

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/smart-fellas/k4a/internal/cache"
 	"github.com/smart-fellas/k4a/internal/kafkactl"
+	"github.com/smart-fellas/k4a/internal/logger"
 	"github.com/smart-fellas/k4a/internal/ui/components/describe"
 	"github.com/smart-fellas/k4a/internal/ui/keys"
 	"gopkg.in/yaml.v3"
@@ -126,10 +127,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Describe):
 			// Show YAML detail
+			logger.Debugf("topics: Describe key pressed, topics count=%d", len(m.topics))
 			if len(m.topics) > 0 {
 				m.showDescribe = true
+				logger.Debugf("topics: Calling loadTopicDetail")
 				return m, m.loadTopicDetail
 			}
+			logger.Debugf("topics: No topics available to describe")
 
 		case key.Matches(msg, m.keys.Refresh):
 			// Check if it's Shift+R (force refresh)
@@ -151,10 +155,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateTable()
 
 	case topicDetailMsg:
+		logger.Debugf("topics: Received topicDetailMsg for '%s' with %d bytes of YAML", msg.name, len(msg.yaml))
 		m.describeView.SetContent(msg.yaml)
 		m.describeView.SetResource(msg.name, "Topic")
 		m.describeView.SetSize(m.width, m.height)
 		m.showDescribe = true
+		logger.Debugf("topics: showDescribe set to true, width=%d, height=%d", m.width, m.height)
 
 	case consumerGroupsMsg:
 		m.updateConsumersTable(msg.groups)
@@ -170,10 +176,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if m.showDescribe {
+		logger.Debugf("topics.View: Rendering describe view")
 		return m.describeView.View()
 	}
 
 	if m.showConsumers {
+		logger.Debugf("topics.View: Rendering consumers table")
 		return m.consumersTable.View()
 	}
 
@@ -301,16 +309,21 @@ func (m *Model) loadTopics(forceRefresh bool) tea.Cmd {
 }
 
 func (m *Model) loadTopicDetail() tea.Msg {
+	logger.Debugf("topics.loadTopicDetail: Starting, topics count=%d", len(m.topics))
+
 	if len(m.topics) == 0 {
+		logger.Debugf("topics.loadTopicDetail: No topics available")
 		return nil
 	}
 
 	selectedRow := m.table.SelectedRow()
 	if len(selectedRow) == 0 {
+		logger.Debugf("topics.loadTopicDetail: No row selected")
 		return nil
 	}
 
 	topicName := selectedRow[0]
+	logger.Debugf("topics.loadTopicDetail: Selected topic name: '%s'", topicName)
 
 	// Find the topic in the cached list
 	var topicData map[string]any
@@ -318,21 +331,25 @@ func (m *Model) loadTopicDetail() tea.Msg {
 		if metadata, ok := topic["metadata"].(map[string]any); ok {
 			if name, nameOk := metadata["name"].(string); nameOk && name == topicName {
 				topicData = topic
+				logger.Debugf("topics.loadTopicDetail: Found topic '%s' in cache", topicName)
 				break
 			}
 		}
 	}
 
 	if topicData == nil {
+		logger.Debugf("topics.loadTopicDetail: Topic '%s' NOT found in cache", topicName)
 		return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Topic '%s' not found in cache", topicName)}
 	}
 
 	// Convert the topic data back to YAML
 	yamlBytes, err := yaml.Marshal(topicData)
 	if err != nil {
+		logger.Debugf("topics.loadTopicDetail: Error marshaling YAML: %v", err)
 		return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Error serializing topic details: %v", err)}
 	}
 
+	logger.Debugf("topics.loadTopicDetail: Successfully marshaled %d bytes of YAML", len(yamlBytes))
 	return topicDetailMsg{name: topicName, yaml: string(yamlBytes)}
 }
 
