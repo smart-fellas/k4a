@@ -103,8 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Describe):
 			if len(m.connectors) > 0 {
-				m.showDescribe = true
-				return m, m.loadConnectorDetail
+				return m, m.loadConnectorDetail()
 			}
 
 		case key.Matches(msg, m.keys.Refresh):
@@ -265,43 +264,45 @@ func (m *Model) loadConnectors(forceRefresh bool) tea.Cmd {
 	}
 }
 
-func (m *Model) loadConnectorDetail() tea.Msg {
-	if len(m.connectors) == 0 {
-		return nil
-	}
+func (m *Model) loadConnectorDetail() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.connectors) == 0 {
+			return nil
+		}
 
-	selectedRow := m.table.SelectedRow()
-	if len(selectedRow) == 0 {
-		return nil
-	}
+		selectedRow := m.table.SelectedRow()
+		if len(selectedRow) == 0 {
+			return nil
+		}
 
-	// Remove the status dot from the connector name
-	connectorName := strings.TrimPrefix(selectedRow[0], "● ")
-	connectorName = strings.TrimPrefix(connectorName, "○ ")
-	connectorName = strings.TrimSpace(connectorName)
+		// Remove the status dot from the connector name
+		connectorName := strings.TrimPrefix(selectedRow[0], "● ")
+		connectorName = strings.TrimPrefix(connectorName, "○ ")
+		connectorName = strings.TrimSpace(connectorName)
 
-	// Find the connector in the cached list
-	var connectorData map[string]any
-	for _, connector := range m.connectors {
-		if metadata, ok := connector["metadata"].(map[string]any); ok {
-			if name, nameOk := metadata["name"].(string); nameOk && name == connectorName {
-				connectorData = connector
-				break
+		// Find the connector in the cached list
+		var connectorData map[string]any
+		for _, connector := range m.connectors {
+			if metadata, ok := connector["metadata"].(map[string]any); ok {
+				if name, nameOk := metadata["name"].(string); nameOk && name == connectorName {
+					connectorData = connector
+					break
+				}
 			}
 		}
-	}
 
-	if connectorData == nil {
-		return connectorDetailMsg{name: connectorName, yaml: fmt.Sprintf("Connector '%s' not found in cache", connectorName)}
-	}
+		if connectorData == nil {
+			return connectorDetailMsg{name: connectorName, yaml: fmt.Sprintf("Connector '%s' not found in cache", connectorName)}
+		}
 
-	// Convert the connector data back to YAML
-	yamlBytes, err := yaml.Marshal(connectorData)
-	if err != nil {
-		return connectorDetailMsg{name: connectorName, yaml: fmt.Sprintf("Error serializing connector details: %v", err)}
-	}
+		// Convert the connector data back to YAML
+		yamlBytes, err := yaml.Marshal(connectorData)
+		if err != nil {
+			return connectorDetailMsg{name: connectorName, yaml: fmt.Sprintf("Error serializing connector details: %v", err)}
+		}
 
-	return connectorDetailMsg{name: connectorName, yaml: string(yamlBytes)}
+		return connectorDetailMsg{name: connectorName, yaml: string(yamlBytes)}
+	}
 }
 
 func (m *Model) pauseConnector() tea.Msg {

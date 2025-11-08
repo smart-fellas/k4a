@@ -100,8 +100,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Describe):
 			if len(m.schemas) > 0 {
-				m.showDescribe = true
-				return m, m.loadSchemaDetail
+				return m, m.loadSchemaDetail()
 			}
 
 		case key.Matches(msg, m.keys.Refresh):
@@ -231,38 +230,40 @@ func (m *Model) loadSchemas(forceRefresh bool) tea.Cmd {
 	}
 }
 
-func (m *Model) loadSchemaDetail() tea.Msg {
-	if len(m.schemas) == 0 {
-		return nil
-	}
+func (m *Model) loadSchemaDetail() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.schemas) == 0 {
+			return nil
+		}
 
-	selectedRow := m.table.SelectedRow()
-	if len(selectedRow) == 0 {
-		return nil
-	}
+		selectedRow := m.table.SelectedRow()
+		if len(selectedRow) == 0 {
+			return nil
+		}
 
-	schemaName := selectedRow[0]
+		schemaName := selectedRow[0]
 
-	// Find the schema in the cached list
-	var schemaData map[string]any
-	for _, schema := range m.schemas {
-		if metadata, ok := schema["metadata"].(map[string]any); ok {
-			if name, nameOk := metadata["name"].(string); nameOk && name == schemaName {
-				schemaData = schema
-				break
+		// Find the schema in the cached list
+		var schemaData map[string]any
+		for _, schema := range m.schemas {
+			if metadata, ok := schema["metadata"].(map[string]any); ok {
+				if name, nameOk := metadata["name"].(string); nameOk && name == schemaName {
+					schemaData = schema
+					break
+				}
 			}
 		}
-	}
 
-	if schemaData == nil {
-		return schemaDetailMsg{name: schemaName, yaml: fmt.Sprintf("Schema '%s' not found in cache", schemaName)}
-	}
+		if schemaData == nil {
+			return schemaDetailMsg{name: schemaName, yaml: fmt.Sprintf("Schema '%s' not found in cache", schemaName)}
+		}
 
-	// Convert the schema data back to YAML
-	yamlBytes, err := yaml.Marshal(schemaData)
-	if err != nil {
-		return schemaDetailMsg{name: schemaName, yaml: fmt.Sprintf("Error serializing schema details: %v", err)}
-	}
+		// Convert the schema data back to YAML
+		yamlBytes, err := yaml.Marshal(schemaData)
+		if err != nil {
+			return schemaDetailMsg{name: schemaName, yaml: fmt.Sprintf("Error serializing schema details: %v", err)}
+		}
 
-	return schemaDetailMsg{name: schemaName, yaml: string(yamlBytes)}
+		return schemaDetailMsg{name: schemaName, yaml: string(yamlBytes)}
+	}
 }

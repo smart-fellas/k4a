@@ -129,9 +129,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Show YAML detail
 			logger.Debugf("topics: Describe key pressed, topics count=%d", len(m.topics))
 			if len(m.topics) > 0 {
-				m.showDescribe = true
 				logger.Debugf("topics: Calling loadTopicDetail")
-				return m, m.loadTopicDetail
+				return m, m.loadTopicDetail()
 			}
 			logger.Debugf("topics: No topics available to describe")
 
@@ -308,49 +307,51 @@ func (m *Model) loadTopics(forceRefresh bool) tea.Cmd {
 	}
 }
 
-func (m *Model) loadTopicDetail() tea.Msg {
-	logger.Debugf("topics.loadTopicDetail: Starting, topics count=%d", len(m.topics))
+func (m *Model) loadTopicDetail() tea.Cmd {
+	return func() tea.Msg {
+		logger.Debugf("topics.loadTopicDetail: Starting, topics count=%d", len(m.topics))
 
-	if len(m.topics) == 0 {
-		logger.Debugf("topics.loadTopicDetail: No topics available")
-		return nil
-	}
+		if len(m.topics) == 0 {
+			logger.Debugf("topics.loadTopicDetail: No topics available")
+			return nil
+		}
 
-	selectedRow := m.table.SelectedRow()
-	if len(selectedRow) == 0 {
-		logger.Debugf("topics.loadTopicDetail: No row selected")
-		return nil
-	}
+		selectedRow := m.table.SelectedRow()
+		if len(selectedRow) == 0 {
+			logger.Debugf("topics.loadTopicDetail: No row selected")
+			return nil
+		}
 
-	topicName := selectedRow[0]
-	logger.Debugf("topics.loadTopicDetail: Selected topic name: '%s'", topicName)
+		topicName := selectedRow[0]
+		logger.Debugf("topics.loadTopicDetail: Selected topic name: '%s'", topicName)
 
-	// Find the topic in the cached list
-	var topicData map[string]any
-	for _, topic := range m.topics {
-		if metadata, ok := topic["metadata"].(map[string]any); ok {
-			if name, nameOk := metadata["name"].(string); nameOk && name == topicName {
-				topicData = topic
-				logger.Debugf("topics.loadTopicDetail: Found topic '%s' in cache", topicName)
-				break
+		// Find the topic in the cached list
+		var topicData map[string]any
+		for _, topic := range m.topics {
+			if metadata, ok := topic["metadata"].(map[string]any); ok {
+				if name, nameOk := metadata["name"].(string); nameOk && name == topicName {
+					topicData = topic
+					logger.Debugf("topics.loadTopicDetail: Found topic '%s' in cache", topicName)
+					break
+				}
 			}
 		}
-	}
 
-	if topicData == nil {
-		logger.Debugf("topics.loadTopicDetail: Topic '%s' NOT found in cache", topicName)
-		return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Topic '%s' not found in cache", topicName)}
-	}
+		if topicData == nil {
+			logger.Debugf("topics.loadTopicDetail: Topic '%s' NOT found in cache", topicName)
+			return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Topic '%s' not found in cache", topicName)}
+		}
 
-	// Convert the topic data back to YAML
-	yamlBytes, err := yaml.Marshal(topicData)
-	if err != nil {
-		logger.Debugf("topics.loadTopicDetail: Error marshaling YAML: %v", err)
-		return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Error serializing topic details: %v", err)}
-	}
+		// Convert the topic data back to YAML
+		yamlBytes, err := yaml.Marshal(topicData)
+		if err != nil {
+			logger.Debugf("topics.loadTopicDetail: Error marshaling YAML: %v", err)
+			return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Error serializing topic details: %v", err)}
+		}
 
-	logger.Debugf("topics.loadTopicDetail: Successfully marshaled %d bytes of YAML", len(yamlBytes))
-	return topicDetailMsg{name: topicName, yaml: string(yamlBytes)}
+		logger.Debugf("topics.loadTopicDetail: Successfully marshaled %d bytes of YAML", len(yamlBytes))
+		return topicDetailMsg{name: topicName, yaml: string(yamlBytes)}
+	}
 }
 
 func (m *Model) loadConsumerGroups(forceRefresh bool) tea.Cmd {
