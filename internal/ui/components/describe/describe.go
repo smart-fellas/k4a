@@ -15,7 +15,6 @@ type Model struct {
 	resourceType string
 	width        int
 	height       int
-	ready        bool
 }
 
 var (
@@ -45,9 +44,7 @@ func New() Model {
 // SetContent sets the YAML content to display
 func (m *Model) SetContent(content string) {
 	m.content = content
-	if m.ready {
-		m.viewport.SetContent(content)
-	}
+	m.viewport.SetContent(content)
 }
 
 // SetResource sets the resource name and type for display
@@ -67,11 +64,10 @@ func (m *Model) SetSize(width, height int) {
 	m.viewport.Width = width - 2 // Account for borders
 	m.viewport.Height = height - headerHeight - footerHeight
 
+	// Always update content when resizing
 	if m.content != "" {
 		m.viewport.SetContent(m.content)
 	}
-
-	m.ready = true
 }
 
 // Update handles viewport updates
@@ -89,10 +85,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 // View renders the describe view
 func (m Model) View() string {
-	if !m.ready {
-		return "Loading..."
-	}
-
 	// Title bar
 	title := titleStyle.Width(m.width).Render(
 		lipgloss.JoinHorizontal(
