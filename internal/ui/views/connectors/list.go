@@ -3,15 +3,18 @@ package connectors
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/smart-fellas/k4a/internal/cache"
 	"github.com/smart-fellas/k4a/internal/kafkactl"
-	"github.com/smart-fellas/k4a/internal/ui/components/dialog"
+	"github.com/smart-fellas/k4a/internal/ui/components/describe"
 	"github.com/smart-fellas/k4a/internal/ui/keys"
 	"github.com/smart-fellas/k4a/internal/ui/styles"
+	"gopkg.in/yaml.v3"
 )
 
 type Model struct {
@@ -24,9 +27,13 @@ type Model struct {
 	loading    bool
 	err        error
 
-	// Detail view
-	showDetail   bool
-	detailDialog dialog.Model
+	// Describe view
+	showDescribe bool
+	describeView describe.Model
+
+	// Auto-refresh
+	refreshInterval time.Duration
+	lastRefresh     time.Time
 }
 
 func New(client *kafkactl.Client) Model {
@@ -58,32 +65,36 @@ func New(client *kafkactl.Client) Model {
 	t.SetStyles(s)
 
 	return Model{
-		client:       client,
-		table:        t,
-		keys:         keys.DefaultKeyMap(),
-		detailDialog: dialog.New(),
+		client:          client,
+		table:           t,
+		keys:            keys.DefaultKeyMap(),
+		describeView:    describe.New(),
+		refreshInterval: cache.DefaultRefreshInterval,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.loadConnectors
+	return tea.Batch(
+		m.loadConnectors(false),
+		m.tickRefresh(),
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	// Handle detail view
-	if m.showDetail {
+	// Handle describe view
+	if m.showDescribe {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			if key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) {
-				m.showDetail = false
+				m.showDescribe = false
 				return m, nil
 			}
 		}
 
-		newDialog, cmd := m.detailDialog.Update(msg)
-		m.detailDialog = newDialog
+		newDescribe, cmd := m.describeView.Update(msg)
+		m.describeView = newDescribe
 		return m, cmd
 	}
 
@@ -92,38 +103,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Describe):
 			if len(m.connectors) > 0 {
-				m.showDetail = true
-				return m, m.loadConnectorDetail
+				return m, m.loadConnectorDetail()
 			}
 
 		case key.Matches(msg, m.keys.Refresh):
-			return m, m.loadConnectors
+			// Check if it's Shift+R (force refresh)
+			forceRefresh := msg.String() == "R"
+			return m, m.loadConnectors(forceRefresh)
 
 		case msg.String() == "p":
 			// Pause connector
 			return m, m.pauseConnector
 
-		case msg.String() == "r":
-			// Resume connector
+		case msg.String() == "s":
+			// Resume connector (changed from 'r' to 's' for start/resume)
 			return m, m.resumeConnector
 
-		case msg.String() == "R":
-			// Restart connector
+		case msg.String() == "t":
+			// Restart connector (changed from 'R' to 't' for restart)
 			return m, m.restartConnector
 		}
+
+	case tickRefreshMsg:
+		// Auto-refresh timer tick
+		return m, tea.Batch(
+			m.loadConnectors(false),
+			m.tickRefresh(),
+		)
 
 	case connectorsLoadedMsg:
 		m.connectors = msg.connectors
 		m.loading = false
+		m.lastRefresh = time.Now()
 		m.updateTable()
 
 	case connectorDetailMsg:
-		m.detailDialog.SetContent(msg.yaml)
-		m.showDetail = true
+		m.describeView.SetContent(msg.yaml)
+		m.describeView.SetResource(msg.name, "Connector")
+		m.describeView.SetSize(m.width, m.height)
+		m.showDescribe = true
 
 	case connectorActionMsg:
 		// Refresh after action
-		return m, m.loadConnectors
+		return m, m.loadConnectors(false)
 	}
 
 	newTable, cmd := m.table.Update(msg)
@@ -134,8 +156,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.showDetail {
-		return m.detailDialog.View()
+	if m.showDescribe {
+		return m.describeView.View()
 	}
 
 	if m.loading {
@@ -153,6 +175,7 @@ func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.table.SetHeight(height - 2)
+	m.describeView.SetSize(width, height)
 }
 
 func (m *Model) updateTable() {
@@ -217,6 +240,7 @@ type connectorsLoadedMsg struct {
 }
 
 type connectorDetailMsg struct {
+	name string
 	yaml string
 }
 
@@ -225,24 +249,60 @@ type connectorActionMsg struct {
 	result string
 }
 
-func (m *Model) loadConnectors() tea.Msg {
-	connectors, err := m.client.GetConnectors()
-	return connectorsLoadedMsg{connectors: connectors, err: err}
+type tickRefreshMsg time.Time
+
+func (m *Model) tickRefresh() tea.Cmd {
+	return tea.Tick(m.refreshInterval, func(t time.Time) tea.Msg {
+		return tickRefreshMsg(t)
+	})
 }
 
-func (m *Model) loadConnectorDetail() tea.Msg {
-	selectedRow := m.table.SelectedRow()
-	if len(selectedRow) == 0 {
-		return nil
+func (m *Model) loadConnectors(forceRefresh bool) tea.Cmd {
+	return func() tea.Msg {
+		connectors, err := m.client.GetConnectors(forceRefresh)
+		return connectorsLoadedMsg{connectors: connectors, err: err}
 	}
+}
 
-	connectorName := selectedRow[0]
-	yaml, err := m.client.GetResourceYAML("connector", connectorName)
-	if err != nil {
-		return connectorDetailMsg{yaml: fmt.Sprintf("Error loading connector details: %v", err)}
+func (m *Model) loadConnectorDetail() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.connectors) == 0 {
+			return nil
+		}
+
+		selectedRow := m.table.SelectedRow()
+		if len(selectedRow) == 0 {
+			return nil
+		}
+
+		// Remove the status dot from the connector name
+		connectorName := strings.TrimPrefix(selectedRow[0], "● ")
+		connectorName = strings.TrimPrefix(connectorName, "○ ")
+		connectorName = strings.TrimSpace(connectorName)
+
+		// Find the connector in the cached list
+		var connectorData map[string]any
+		for _, connector := range m.connectors {
+			if metadata, ok := connector["metadata"].(map[string]any); ok {
+				if name, nameOk := metadata["name"].(string); nameOk && name == connectorName {
+					connectorData = connector
+					break
+				}
+			}
+		}
+
+		if connectorData == nil {
+			return connectorDetailMsg{name: connectorName, yaml: fmt.Sprintf("Connector '%s' not found in cache", connectorName)}
+		}
+
+		// Convert the connector data back to YAML
+		yamlBytes, err := yaml.Marshal(connectorData)
+		if err != nil {
+			return connectorDetailMsg{name: connectorName, yaml: fmt.Sprintf("Error serializing connector details: %v", err)}
+		}
+
+		return connectorDetailMsg{name: connectorName, yaml: string(yamlBytes)}
 	}
-
-	return connectorDetailMsg{yaml: yaml}
 }
 
 func (m *Model) pauseConnector() tea.Msg {

@@ -2,14 +2,18 @@ package topics
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/smart-fellas/k4a/internal/cache"
 	"github.com/smart-fellas/k4a/internal/kafkactl"
-	"github.com/smart-fellas/k4a/internal/ui/components/dialog"
+	"github.com/smart-fellas/k4a/internal/logger"
+	"github.com/smart-fellas/k4a/internal/ui/components/describe"
 	"github.com/smart-fellas/k4a/internal/ui/keys"
+	"gopkg.in/yaml.v3"
 )
 
 type Model struct {
@@ -22,13 +26,17 @@ type Model struct {
 	loading bool
 	err     error
 
-	// Detail view
-	showDetail   bool
-	detailDialog dialog.Model
+	// Describe view
+	showDescribe bool
+	describeView describe.Model
 
 	// Consumer groups view
 	showConsumers  bool
 	consumersTable table.Model
+
+	// Auto-refresh
+	refreshInterval time.Duration
+	lastRefresh     time.Time
 }
 
 func New(client *kafkactl.Client) Model {
@@ -59,32 +67,36 @@ func New(client *kafkactl.Client) Model {
 	t.SetStyles(s)
 
 	return Model{
-		client:       client,
-		table:        t,
-		keys:         keys.DefaultKeyMap(),
-		detailDialog: dialog.New(),
+		client:          client,
+		table:           t,
+		keys:            keys.DefaultKeyMap(),
+		describeView:    describe.New(),
+		refreshInterval: cache.DefaultRefreshInterval,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.loadTopics
+	return tea.Batch(
+		m.loadTopics(false),
+		m.tickRefresh(),
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	// Handle detail view
-	if m.showDetail {
+	// Handle describe view
+	if m.showDescribe {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			if key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) {
-				m.showDetail = false
+				m.showDescribe = false
 				return m, nil
 			}
 		}
 
-		newDialog, cmd := m.detailDialog.Update(msg)
-		m.detailDialog = newDialog
+		newDescribe, cmd := m.describeView.Update(msg)
+		m.describeView = newDescribe
 		return m, cmd
 	}
 
@@ -110,28 +122,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Show consumer groups for selected topic
 			if len(m.topics) > 0 {
 				m.showConsumers = true
-				return m, m.loadConsumerGroups
+				return m, m.loadConsumerGroups(false)
 			}
 
 		case key.Matches(msg, m.keys.Describe):
 			// Show YAML detail
+			logger.Debugf("topics: Describe key pressed, topics count=%d", len(m.topics))
 			if len(m.topics) > 0 {
-				m.showDetail = true
-				return m, m.loadTopicDetail
+				logger.Debugf("topics: Calling loadTopicDetail")
+				return m, m.loadTopicDetail()
 			}
+			logger.Debugf("topics: No topics available to describe")
 
 		case key.Matches(msg, m.keys.Refresh):
-			return m, m.loadTopics
+			// Check if it's Shift+R (force refresh)
+			forceRefresh := msg.String() == "R"
+			return m, m.loadTopics(forceRefresh)
 		}
+
+	case tickRefreshMsg:
+		// Auto-refresh timer tick
+		return m, tea.Batch(
+			m.loadTopics(false),
+			m.tickRefresh(),
+		)
 
 	case topicsLoadedMsg:
 		m.topics = msg.topics
 		m.loading = false
+		m.lastRefresh = time.Now()
 		m.updateTable()
 
 	case topicDetailMsg:
-		m.detailDialog.SetContent(msg.yaml)
-		m.showDetail = true
+		logger.Debugf("topics: Received topicDetailMsg for '%s' with %d bytes of YAML", msg.name, len(msg.yaml))
+		m.describeView.SetContent(msg.yaml)
+		m.describeView.SetResource(msg.name, "Topic")
+		m.describeView.SetSize(m.width, m.height)
+		m.showDescribe = true
+		logger.Debugf("topics: showDescribe set to true, width=%d, height=%d", m.width, m.height)
 
 	case consumerGroupsMsg:
 		m.updateConsumersTable(msg.groups)
@@ -146,11 +174,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.showDetail {
-		return m.detailDialog.View()
+	if m.showDescribe {
+		logger.Debugf("topics.View: Rendering describe view")
+		return m.describeView.View()
 	}
 
 	if m.showConsumers {
+		logger.Debugf("topics.View: Rendering consumers table")
 		return m.consumersTable.View()
 	}
 
@@ -169,6 +199,7 @@ func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.table.SetHeight(height - 2)
+	m.describeView.SetSize(width, height)
 }
 
 func (m *Model) updateTable() {
@@ -253,6 +284,7 @@ type topicsLoadedMsg struct {
 }
 
 type topicDetailMsg struct {
+	name string
 	yaml string
 }
 
@@ -260,41 +292,81 @@ type consumerGroupsMsg struct {
 	groups []map[string]any
 }
 
-func (m *Model) loadTopics() tea.Msg {
-	topics, err := m.client.GetTopics()
-	return topicsLoadedMsg{topics: topics, err: err}
+type tickRefreshMsg time.Time
+
+func (m *Model) tickRefresh() tea.Cmd {
+	return tea.Tick(m.refreshInterval, func(t time.Time) tea.Msg {
+		return tickRefreshMsg(t)
+	})
 }
 
-func (m *Model) loadTopicDetail() tea.Msg {
-	if len(m.topics) == 0 {
-		return nil
+func (m *Model) loadTopics(forceRefresh bool) tea.Cmd {
+	return func() tea.Msg {
+		topics, err := m.client.GetTopics(forceRefresh)
+		return topicsLoadedMsg{topics: topics, err: err}
 	}
-
-	selectedRow := m.table.SelectedRow()
-	if len(selectedRow) == 0 {
-		return nil
-	}
-
-	topicName := selectedRow[0]
-	yaml, err := m.client.GetResourceYAML("topic", topicName)
-	if err != nil {
-		return topicDetailMsg{yaml: fmt.Sprintf("Error loading topic details: %v", err)}
-	}
-
-	return topicDetailMsg{yaml: yaml}
 }
 
-func (m *Model) loadConsumerGroups() tea.Msg {
-	selectedRow := m.table.SelectedRow()
-	if len(selectedRow) == 0 {
-		return nil
-	}
+func (m *Model) loadTopicDetail() tea.Cmd {
+	return func() tea.Msg {
+		logger.Debugf("topics.loadTopicDetail: Starting, topics count=%d", len(m.topics))
 
-	topicName := selectedRow[0]
-	groups, err := m.client.GetConsumerGroups(topicName)
-	if err != nil {
-		return nil
-	}
+		if len(m.topics) == 0 {
+			logger.Debugf("topics.loadTopicDetail: No topics available")
+			return nil
+		}
 
-	return consumerGroupsMsg{groups: groups}
+		selectedRow := m.table.SelectedRow()
+		if len(selectedRow) == 0 {
+			logger.Debugf("topics.loadTopicDetail: No row selected")
+			return nil
+		}
+
+		topicName := selectedRow[0]
+		logger.Debugf("topics.loadTopicDetail: Selected topic name: '%s'", topicName)
+
+		// Find the topic in the cached list
+		var topicData map[string]any
+		for _, topic := range m.topics {
+			if metadata, ok := topic["metadata"].(map[string]any); ok {
+				if name, nameOk := metadata["name"].(string); nameOk && name == topicName {
+					topicData = topic
+					logger.Debugf("topics.loadTopicDetail: Found topic '%s' in cache", topicName)
+					break
+				}
+			}
+		}
+
+		if topicData == nil {
+			logger.Debugf("topics.loadTopicDetail: Topic '%s' NOT found in cache", topicName)
+			return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Topic '%s' not found in cache", topicName)}
+		}
+
+		// Convert the topic data back to YAML
+		yamlBytes, err := yaml.Marshal(topicData)
+		if err != nil {
+			logger.Debugf("topics.loadTopicDetail: Error marshaling YAML: %v", err)
+			return topicDetailMsg{name: topicName, yaml: fmt.Sprintf("Error serializing topic details: %v", err)}
+		}
+
+		logger.Debugf("topics.loadTopicDetail: Successfully marshaled %d bytes of YAML", len(yamlBytes))
+		return topicDetailMsg{name: topicName, yaml: string(yamlBytes)}
+	}
+}
+
+func (m *Model) loadConsumerGroups(forceRefresh bool) tea.Cmd {
+	return func() tea.Msg {
+		selectedRow := m.table.SelectedRow()
+		if len(selectedRow) == 0 {
+			return nil
+		}
+
+		topicName := selectedRow[0]
+		groups, err := m.client.GetConsumerGroups(topicName, forceRefresh)
+		if err != nil {
+			return nil
+		}
+
+		return consumerGroupsMsg{groups: groups}
+	}
 }

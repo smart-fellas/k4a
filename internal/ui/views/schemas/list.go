@@ -2,14 +2,17 @@ package schemas
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/smart-fellas/k4a/internal/cache"
 	"github.com/smart-fellas/k4a/internal/kafkactl"
-	"github.com/smart-fellas/k4a/internal/ui/components/dialog"
+	"github.com/smart-fellas/k4a/internal/ui/components/describe"
 	"github.com/smart-fellas/k4a/internal/ui/keys"
+	"gopkg.in/yaml.v3"
 )
 
 type Model struct {
@@ -22,9 +25,13 @@ type Model struct {
 	loading bool
 	err     error
 
-	// Detail view
-	showDetail   bool
-	detailDialog dialog.Model
+	// Describe view
+	showDescribe bool
+	describeView describe.Model
+
+	// Auto-refresh
+	refreshInterval time.Duration
+	lastRefresh     time.Time
 }
 
 func New(client *kafkactl.Client) Model {
@@ -55,32 +62,36 @@ func New(client *kafkactl.Client) Model {
 	t.SetStyles(s)
 
 	return Model{
-		client:       client,
-		table:        t,
-		keys:         keys.DefaultKeyMap(),
-		detailDialog: dialog.New(),
+		client:          client,
+		table:           t,
+		keys:            keys.DefaultKeyMap(),
+		describeView:    describe.New(),
+		refreshInterval: cache.DefaultRefreshInterval,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.loadSchemas
+	return tea.Batch(
+		m.loadSchemas(false),
+		m.tickRefresh(),
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	// Handle detail view
-	if m.showDetail {
+	// Handle describe view
+	if m.showDescribe {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			if key.Matches(msg, m.keys.Back) || key.Matches(msg, m.keys.Quit) {
-				m.showDetail = false
+				m.showDescribe = false
 				return m, nil
 			}
 		}
 
-		newDialog, cmd := m.detailDialog.Update(msg)
-		m.detailDialog = newDialog
+		newDescribe, cmd := m.describeView.Update(msg)
+		m.describeView = newDescribe
 		return m, cmd
 	}
 
@@ -89,22 +100,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Describe):
 			if len(m.schemas) > 0 {
-				m.showDetail = true
-				return m, m.loadSchemaDetail
+				return m, m.loadSchemaDetail()
 			}
 
 		case key.Matches(msg, m.keys.Refresh):
-			return m, m.loadSchemas
+			// Check if it's Shift+R (force refresh)
+			forceRefresh := msg.String() == "R"
+			return m, m.loadSchemas(forceRefresh)
 		}
+
+	case tickRefreshMsg:
+		// Auto-refresh timer tick
+		return m, tea.Batch(
+			m.loadSchemas(false),
+			m.tickRefresh(),
+		)
 
 	case schemasLoadedMsg:
 		m.schemas = msg.schemas
 		m.loading = false
+		m.lastRefresh = time.Now()
 		m.updateTable()
 
 	case schemaDetailMsg:
-		m.detailDialog.SetContent(msg.yaml)
-		m.showDetail = true
+		m.describeView.SetContent(msg.yaml)
+		m.describeView.SetResource(msg.name, "Schema")
+		m.describeView.SetSize(m.width, m.height)
+		m.showDescribe = true
 	}
 
 	newTable, cmd := m.table.Update(msg)
@@ -115,8 +137,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.showDetail {
-		return m.detailDialog.View()
+	if m.showDescribe {
+		return m.describeView.View()
 	}
 
 	if m.loading {
@@ -134,6 +156,7 @@ func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.table.SetHeight(height - 2)
+	m.describeView.SetSize(width, height)
 }
 
 func (m *Model) updateTable() {
@@ -188,29 +211,59 @@ type schemasLoadedMsg struct {
 }
 
 type schemaDetailMsg struct {
+	name string
 	yaml string
 }
 
-func (m *Model) loadSchemas() tea.Msg {
-	schemas, err := m.client.GetSchemas()
-	return schemasLoadedMsg{schemas: schemas, err: err}
+type tickRefreshMsg time.Time
+
+func (m *Model) tickRefresh() tea.Cmd {
+	return tea.Tick(m.refreshInterval, func(t time.Time) tea.Msg {
+		return tickRefreshMsg(t)
+	})
 }
 
-func (m *Model) loadSchemaDetail() tea.Msg {
-	if len(m.schemas) == 0 {
-		return nil
+func (m *Model) loadSchemas(forceRefresh bool) tea.Cmd {
+	return func() tea.Msg {
+		schemas, err := m.client.GetSchemas(forceRefresh)
+		return schemasLoadedMsg{schemas: schemas, err: err}
 	}
+}
 
-	selectedRow := m.table.SelectedRow()
-	if len(selectedRow) == 0 {
-		return nil
+func (m *Model) loadSchemaDetail() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.schemas) == 0 {
+			return nil
+		}
+
+		selectedRow := m.table.SelectedRow()
+		if len(selectedRow) == 0 {
+			return nil
+		}
+
+		schemaName := selectedRow[0]
+
+		// Find the schema in the cached list
+		var schemaData map[string]any
+		for _, schema := range m.schemas {
+			if metadata, ok := schema["metadata"].(map[string]any); ok {
+				if name, nameOk := metadata["name"].(string); nameOk && name == schemaName {
+					schemaData = schema
+					break
+				}
+			}
+		}
+
+		if schemaData == nil {
+			return schemaDetailMsg{name: schemaName, yaml: fmt.Sprintf("Schema '%s' not found in cache", schemaName)}
+		}
+
+		// Convert the schema data back to YAML
+		yamlBytes, err := yaml.Marshal(schemaData)
+		if err != nil {
+			return schemaDetailMsg{name: schemaName, yaml: fmt.Sprintf("Error serializing schema details: %v", err)}
+		}
+
+		return schemaDetailMsg{name: schemaName, yaml: string(yamlBytes)}
 	}
-
-	schemaName := selectedRow[0]
-	yaml, err := m.client.GetResourceYAML("schema", schemaName)
-	if err != nil {
-		return schemaDetailMsg{yaml: fmt.Sprintf("Error loading schema details: %v", err)}
-	}
-
-	return schemaDetailMsg{yaml: yaml}
 }
