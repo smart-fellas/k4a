@@ -108,7 +108,7 @@ jobs:
           go build -o bin/${OUTPUT_NAME} -ldflags="-s -w" ./cmd/k4a
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: k4a-${{ matrix.goos }}-${{ matrix.goarch }}
           path: bin/k4a-*
