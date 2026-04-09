@@ -64,8 +64,8 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("e", "edit"),
 		),
 		Refresh: key.NewBinding(
-			key.WithKeys("r", "ctrl+r"),
-			key.WithHelp("r", "refresh"),
+			key.WithKeys("r", "ctrl+r", "R"),
+			key.WithHelp("r/R", "refresh/force"),
 		),
 		Filter: key.NewBinding(
 			key.WithKeys("/"),

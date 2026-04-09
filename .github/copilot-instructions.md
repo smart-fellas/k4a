@@ -25,11 +25,14 @@ k4a/
 ├── internal/             # Private application code
 │   ├── app/              # Core application logic
 │   │   └── app.go        # Bubble Tea model and update logic
+│   ├── cache/            # Cache management
+│   │   ├── cache.go      # File-based caching for kafkactl responses
+│   │   └── README.md     # Cache package documentation
 │   ├── config/           # Configuration management
 │   │   ├── config.go     # Config loading (reads ~/.kafkactl/config.yml)
 │   │   └── context/      # Context switching logic
 │   ├── kafkactl/         # Kafkactl CLI wrapper
-│   │   └── client.go     # Executes kafkactl commands
+│   │   └── client.go     # Executes kafkactl commands with caching
 │   └── ui/               # User interface components
 │       ├── components/   # Reusable UI components
 │       │   ├── command/  # Command input handler
@@ -314,6 +317,27 @@ case tea.WindowSizeMsg:
     m.footer.SetSize(msg.Width, footerHeight)
 ```
 
+### 5. Caching and Auto-Refresh
+```go
+// Auto-refresh timer
+func (m *Model) tickRefresh() tea.Cmd {
+    return tea.Tick(m.refreshInterval, func(t time.Time) tea.Msg {
+        return tickRefreshMsg(t)
+    })
+}
+
+// Load with optional force refresh
+topics, err := m.client.GetTopics(forceRefresh)
+
+// Fetch details from cached list (no kafkactl call)
+for _, topic := range m.topics {
+    if metadata["name"] == selectedName {
+        yamlBytes, _ := yaml.Marshal(topic)
+        return topicDetailMsg{yaml: string(yamlBytes)}
+    }
+}
+```
+
 ## Dependencies Management
 
 ### Direct Dependencies
@@ -357,7 +381,6 @@ gopkg.in/yaml.v3                   // YAML parsing
 4. Add command in command handler (e.g., `:newview`)
 5. Add keyboard shortcut if needed
 6. Update help screen
-7. Add documentation
 
 ### When Adding New Features
 1. Check if kafkactl supports the operation
@@ -371,7 +394,10 @@ gopkg.in/yaml.v3                   // YAML parsing
 ### Performance Considerations
 - Avoid blocking operations in Update()
 - Use tea.Cmd for async operations
-- Cache kafkactl results when appropriate
+- **Cache kafkactl results** (implemented: `~/.local/k4a/cache/`, 10min default)
+- **Fetch resource details from cached list** (no extra kafkactl calls)
+- Use auto-refresh (implemented: 10min background refresh)
+- Manual refresh: `r` (cached) vs `R` (force fresh)
 - Debounce rapid key presses
 - Optimize View() rendering (it's called frequently)
 

@@ -46,7 +46,7 @@ func DefaultKeybindings() []Keybinding {
 		{"↑↓", "navigate"},
 		{"enter", "select"},
 		{"d", "describe"},
-		{"r", "refresh"},
+		{"r/R", "refresh/force"},
 		{"/", "filter"},
 		{":", "command"},
 		{"?", "help"},
